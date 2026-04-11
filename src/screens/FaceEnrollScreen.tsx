@@ -1,94 +1,117 @@
-import React, { useContext, useEffect, useState } from 'react';
-import { Alert, Pressable, Text, View, ActivityIndicator } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
-import FaceCaptureModal from '../../components/FaceCaptureModal';
-import api from '../api/api';
+import GuidedFaceEnrollModal from '../../components/GuidedFaceEnrollModal';
 import { AuthContext } from '../auth/AuthContext';
 import { setItem, USER_KEY } from '../storage/token';
+import { enrollFaceMulti, FaceSample } from '../api/face';
 
 export default function FaceEnrollScreen() {
   const navigation = useNavigation<any>();
-  const { user, setUser, ready } = useContext(AuthContext);
+  const { user, setUser } = useContext(AuthContext);
+
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!ready) return;
-    if (user?.faceEnrolled) {
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        }),
-      );
-    }
-  }, [ready, user?.faceEnrolled, navigation]);
-
-  const onCaptured = async (photoUri: string) => {
+  const handleComplete = async (samples: FaceSample[]) => {
     try {
-      setLoading(true);
-      const fd = new FormData();
-      fd.append('photo', {
-        uri: photoUri,
-        name: `enroll_${Date.now()}.jpg`,
-        type: 'image/jpeg',
-      } as any);
+      if (saving) return;
 
-      await api.post('/face/enroll', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      setSaving(true);
 
-      const updated = { ...(user ?? {}), faceEnrolled: true };
-      setUser(updated);
-      await setItem(USER_KEY, JSON.stringify(updated));
+      const result = await enrollFaceMulti(samples);
 
-      Alert.alert('Done', 'Face enrolled successfully.');
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        }),
+      const updatedUser = {
+        ...(user ?? {}),
+        faceEnrolled: true,
+      };
+
+      setUser(updatedUser);
+      await setItem(USER_KEY, JSON.stringify(updatedUser));
+
+      setOpen(false);
+
+      Alert.alert(
+        'Enrollment Successful',
+        `Accepted ${result?.data?.acceptedCount ?? samples.length} face samples successfully.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'MainTabs' }],
+                }),
+              );
+            },
+          },
+        ]
       );
     } catch (e: any) {
-      Alert.alert('Failed', e?.response?.data?.message || 'Face enroll failed');
+      Alert.alert(
+        'Enrollment Failed',
+        e?.response?.data?.message || 'Could not complete face enrollment.'
+      );
     } finally {
-      setLoading(false);
-      setOpen(false);
+      setSaving(false);
     }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0B1220', padding: 16, gap: 12 }}>
-      <FaceCaptureModal visible={open} onClose={() => setOpen(false)} onCaptured={onCaptured} />
+    <View style={{ flex: 1, backgroundColor: '#0b1220', padding: 16 }}>
+      <GuidedFaceEnrollModal
+        visible={open}
+        onClose={() => !saving && setOpen(false)}
+        onComplete={handleComplete}
+      />
 
-      <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900' }}>Face Enrollment</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.7)' }}>
-        You must enroll your face once before using attendance.
+      <Text style={{ color: '#fff', fontSize: 24, fontWeight: '900' }}>
+        Face Enrollment
       </Text>
+
+      <Text style={{ color: 'rgba(255,255,255,0.72)', marginTop: 10, lineHeight: 22 }}>
+        We will automatically capture guided face angles for accurate and secure attendance verification.
+      </Text>
+
+      <View
+        style={{
+          marginTop: 20,
+          borderRadius: 18,
+          padding: 16,
+          backgroundColor: 'rgba(255,255,255,0.05)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.08)',
+        }}
+      >
+        <Text style={{ color: '#fff', marginBottom: 8 }}>• Look straight</Text>
+        <Text style={{ color: '#fff', marginBottom: 8 }}>• Turn left</Text>
+        <Text style={{ color: '#fff', marginBottom: 8 }}>• Turn right</Text>
+        <Text style={{ color: '#fff', marginBottom: 8 }}>• Look up</Text>
+        <Text style={{ color: '#fff' }}>• Look down</Text>
+      </View>
 
       <Pressable
+        disabled={saving}
         onPress={() => setOpen(true)}
-        disabled={loading}
         style={({ pressed }) => ({
-          height: 52,
-          borderRadius: 14,
+          marginTop: 24,
+          height: 54,
+          borderRadius: 16,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: pressed ? 'rgba(37,99,235,0.85)' : '#2563eb',
-          opacity: loading ? 0.7 : 1,
-          marginTop: 10,
+          backgroundColor: pressed ? '#2557cf' : '#2f6df6',
+          opacity: saving ? 0.7 : 1,
         })}
       >
-        {loading ? (
+        {saving ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={{ color: '#fff', fontWeight: '900' }}>Capture & Enroll</Text>
+          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>
+            Start Enrollment
+          </Text>
         )}
       </Pressable>
-
-      <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 10 }}>
-        Tips: good light, front face, remove mask, hold still.
-      </Text>
     </View>
   );
 }
