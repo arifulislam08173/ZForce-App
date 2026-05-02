@@ -12,12 +12,14 @@ export default function FaceEnrollScreen() {
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingText, setSavingText] = useState('');
 
   const handleComplete = async (samples: FaceSample[]) => {
     try {
       if (saving) return;
 
       setSaving(true);
+      setSavingText('Preparing photos...');
 
       const result = await enrollFaceMulti(samples);
 
@@ -51,10 +53,11 @@ export default function FaceEnrollScreen() {
     } catch (e: any) {
       Alert.alert(
         'Enrollment Failed',
-        e?.response?.data?.message || 'Could not complete face enrollment.'
+        e?.response?.data?.message || e?.message || 'Could not complete face enrollment.'
       );
     } finally {
       setSaving(false);
+      setSavingText('');
     }
   };
 
@@ -71,7 +74,7 @@ export default function FaceEnrollScreen() {
       </Text>
 
       <Text style={{ color: 'rgba(255,255,255,0.72)', marginTop: 10, lineHeight: 22 }}>
-        We will automatically capture guided face angles for accurate and secure attendance verification.
+        We will capture 3 guided face angles for fast and secure attendance verification.
       </Text>
 
       <View
@@ -86,9 +89,7 @@ export default function FaceEnrollScreen() {
       >
         <Text style={{ color: '#fff', marginBottom: 8 }}>• Look straight</Text>
         <Text style={{ color: '#fff', marginBottom: 8 }}>• Turn left</Text>
-        <Text style={{ color: '#fff', marginBottom: 8 }}>• Turn right</Text>
-        <Text style={{ color: '#fff', marginBottom: 8 }}>• Look up</Text>
-        <Text style={{ color: '#fff' }}>• Look down</Text>
+        <Text style={{ color: '#fff' }}>• Turn right</Text>
       </View>
 
       <Pressable
@@ -112,6 +113,12 @@ export default function FaceEnrollScreen() {
           </Text>
         )}
       </Pressable>
+
+      {saving && !!savingText ? (
+        <Text style={{ color: 'rgba(255,255,255,0.7)', marginTop: 12, textAlign: 'center' }}>
+          {savingText}
+        </Text>
+      ) : null}
     </View>
   );
 }

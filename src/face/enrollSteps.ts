@@ -14,14 +14,4 @@ export const ENROLL_STEPS = [
     title: 'Turn Right',
     subtitle: 'Turn your face slightly to the right.',
   },
-  {
-    key: 'up',
-    title: 'Look Up',
-    subtitle: 'Raise your chin slightly upward.',
-  },
-  {
-    key: 'down',
-    title: 'Look Down',
-    subtitle: 'Lower your chin slightly downward.',
-  },
 ];
