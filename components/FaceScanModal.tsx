@@ -32,8 +32,8 @@ export default function FaceScanModal({
   subtitle,
   onClose,
   onVerify,
-  scanIntervalMs = 1200,
-  maxScanMs = 12000,
+  scanIntervalMs = 650,
+  maxScanMs = 10000,
 }: Props) {
   const cameraRef = useRef<Camera>(null);
   const device = useCameraDevice('front');
@@ -44,6 +44,7 @@ export default function FaceScanModal({
   const [capturing, setCapturing] = useState(false);
 
   const scanningRef = useRef(false);
+  const capturingRef = useRef(false);
   const startedAtRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef = useRef(false);
@@ -71,6 +72,7 @@ export default function FaceScanModal({
     closedRef.current = false;
     setStatus('idle');
     setMessage('');
+    capturingRef.current = false;
     setCapturing(false);
   };
 
@@ -139,7 +141,8 @@ export default function FaceScanModal({
       const photo = await cameraRef.current.takePhoto({
         flash: 'off',
         enableShutterSound: false,
-      });
+        qualityPrioritization: 'speed',
+      } as any);
 
       if (!photo?.path) return null;
       return `file://${photo.path}`;
@@ -159,12 +162,13 @@ export default function FaceScanModal({
       return;
     }
 
-    if (capturing) {
+    if (capturingRef.current) {
       timerRef.current = setTimeout(scanLoop, scanIntervalMs);
       return;
     }
 
     try {
+      capturingRef.current = true;
       setCapturing(true);
 
       const uri = await takeFrame();
@@ -196,6 +200,7 @@ export default function FaceScanModal({
       setStatus('scanning');
       setMessage(error?.message || 'Scanning... keep face centered');
     } finally {
+      capturingRef.current = false;
       setCapturing(false);
     }
 
@@ -206,11 +211,19 @@ export default function FaceScanModal({
     clearLoop();
     closedRef.current = false;
     setStatus('scanning');
-    setMessage('Scanning... keep your face inside the frame');
+    setMessage('Preparing camera... keep your face inside the frame');
     scanningRef.current = true;
     startedAtRef.current = Date.now();
     startLineAnimation();
-    void scanLoop();
+
+    // Give the camera a short moment for focus/exposure after the modal opens.
+    // This avoids first-frame failures on slower Android devices.
+    timerRef.current = setTimeout(() => {
+      if (!closedRef.current && scanningRef.current) {
+        setMessage('Scanning... keep your face centered');
+        void scanLoop();
+      }
+    }, 800);
   };
 
   const handleRetry = () => {

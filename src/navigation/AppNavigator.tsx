@@ -88,12 +88,25 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
+  const faceEnrolled = user?.faceEnrolled === true;
 
   if (!token) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  if (!faceEnrolled) {
+    return (
+      <Stack.Navigator screenOptions={{ headerTitleStyle: { fontWeight: '900' } }}>
+        <Stack.Screen
+          name="FaceEnroll"
+          component={FaceEnrollScreen}
+          options={{ title: 'Face Enroll', headerBackVisible: false }}
+        />
       </Stack.Navigator>
     );
   }

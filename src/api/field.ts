@@ -1,6 +1,6 @@
 import api from './api';
 import { Platform } from 'react-native';
-import { optimizeFaceImage } from '../utils/faceImage';
+import { optimizeAttendanceFaceImage } from '../utils/faceImage';
 
 async function uriToFilePart(uri: string, filename: string) {
   if (Platform.OS === 'web') {
@@ -18,12 +18,12 @@ async function uriToFilePart(uri: string, filename: string) {
 
 function multipartConfig() {
   if (Platform.OS === 'web') {
-    return { timeout: 45000 };
+    return { timeout: 60000 };
   }
 
   return {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 45000,
+    timeout: 60000,
   };
 }
 
@@ -37,7 +37,7 @@ export const FieldAPI = {
     fd.append('lat', String(lat));
     fd.append('lng', String(lng));
 
-    const optimized = await optimizeFaceImage(photoUri);
+    const optimized = await optimizeAttendanceFaceImage(photoUri);
     const filePart = await uriToFilePart(
       optimized.uri,
       `punchin_${Date.now()}.jpg`
@@ -53,7 +53,7 @@ export const FieldAPI = {
     fd.append('lat', String(lat));
     fd.append('lng', String(lng));
 
-    const optimized = await optimizeFaceImage(photoUri);
+    const optimized = await optimizeAttendanceFaceImage(photoUri);
     const filePart = await uriToFilePart(
       optimized.uri,
       `punchout_${Date.now()}.jpg`

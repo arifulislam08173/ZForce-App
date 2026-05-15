@@ -94,7 +94,7 @@ export default function CollectionCreateModal({
   const [orderId, setOrderId] = useState("");
 
   const [amount, setAmount] = useState("");
-  const [paymentType, setPaymentType] = useState<"CASH" | "UPI" | "CHEQUE">("CASH");
+  const [paymentType, setPaymentType] = useState<"CASH" | "CHEQUE">("CASH");
   const [receiptUrl, setReceiptUrl] = useState("");
 
   useEffect(() => {
@@ -370,7 +370,7 @@ export default function CollectionCreateModal({
             <View>
               <Text style={{ fontSize: 12, fontWeight: "900", color: UI.sub }}>PAYMENT TYPE</Text>
               <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-                {(["CASH", "UPI", "CHEQUE"] as const).map((t) => {
+                {(["CASH", "CHEQUE"] as const).map((t) => {
                   const active = t === paymentType;
                   return (
                     <Pressable

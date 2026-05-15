@@ -7,7 +7,7 @@ export type CollectionRow = {
   userId: string;
   orderId: string;
   amount: number;
-  paymentType: "CASH" | "UPI" | "CHEQUE";
+  paymentType: "CASH" | "CHEQUE";
   receiptUrl?: string | null;
   status: CollectionStatus | string;
   collectedAt?: string | null;
@@ -44,7 +44,7 @@ export async function fetchMyCollections(params: {
 export async function createCollection(payload: {
   orderId: string;
   amount: number;
-  paymentType: "CASH" | "UPI" | "CHEQUE";
+  paymentType: "CASH" | "CHEQUE";
   receiptUrl?: string | null;
 }) {
   const res = await api.post("/collections", payload);
