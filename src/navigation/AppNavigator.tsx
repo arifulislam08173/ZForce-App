@@ -10,7 +10,6 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import HomeScreen from '../screens/tabs/HomeScreen';
 import OrdersTabScreen from '../screens/tabs/OrdersTabScreen';
 import AttendanceScreen from '../screens/tabs/AttendanceScreen';
-import ProfileScreen from '../screens/tabs/ProfileScreen';
 import MoreScreen from '../screens/tabs/MoreScreen';
 import VisitsScreen from '../screens/more/VisitsScreen';
 import RoutePlanScreen from '../screens/more/RoutePlanScreen';
@@ -37,7 +36,6 @@ export type TabParamList = {
   Home: undefined;
   Orders: { refresh?: string } | undefined;
   Attendance: undefined;
-  Profile: undefined;
   More: undefined;
 };
 
@@ -59,19 +57,24 @@ function MainTabs() {
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           height: barHeight,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
           paddingTop: 8,
           paddingBottom: insets.bottom + extraBottom,
           backgroundColor: '#fff',
+          shadowColor: '#000',
+          shadowOpacity: 0.08,
+          shadowRadius: 18,
+          elevation: 12,
           borderTopWidth: 1,
           borderTopColor: 'rgba(0,0,0,0.08)',
         },
-        tabBarLabelStyle: { fontSize: 12, marginTop: 2, marginBottom: 2, lineHeight: 14 },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '800', marginTop: 2, marginBottom: 2, lineHeight: 14 },
         tabBarIcon: ({ color, size }) => {
           const icons: Record<string, string> = {
             Home: 'home-outline',
             Orders: 'cart-outline',
             Attendance: 'time-outline',
-            Profile: 'person-outline',
             More: 'menu-outline',
           };
           return <Ionicons name={icons[route.name]} color={color} size={size} />;
@@ -81,7 +84,6 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Orders" component={OrdersTabScreen} options={{ title: 'Orders' }} />
       <Tab.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Tab.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
     </Tab.Navigator>
   );

@@ -1,26 +1,42 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Platform, Pressable, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
 
 const UI = {
-  border: "rgba(15,23,42,0.08)",
+  border: "rgba(15,23,42,0.10)",
   text: "#0f172a",
-  sub: "rgba(15,23,42,0.65)",
+  sub: "rgba(15,23,42,0.62)",
   primary: "#2563eb",
+  primarySoft: "rgba(37,99,235,0.10)",
+  bg: "#f8fafc",
 };
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const WEEK_DAYS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
 function formatYMD(d: Date) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function formatLocalDT(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes()
-  )}`;
+  return `${formatYMD(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function parseLocalDate(value: string, mode: "date" | "datetime") {
@@ -39,11 +55,36 @@ function parseLocalDate(value: string, mode: "date" | "datetime") {
   return new Date(y, m - 1, d, Number.isFinite(hh) ? hh : 0, Number.isFinite(mm) ? mm : 0);
 }
 
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function buildCalendarDays(monthDate: Date) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const first = new Date(year, month, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: Array<Date | null> = [];
+
+  for (let i = 0; i < startOffset; i += 1) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day += 1) cells.push(new Date(year, month, day));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return cells;
+}
+
+function clampTextNumber(value: string, min: number, max: number) {
+  const digits = value.replace(/[^0-9]/g, "").slice(0, 2);
+  if (!digits) return "";
+  const parsed = Math.max(min, Math.min(max, parseInt(digits, 10)));
+  return String(parsed);
+}
+
 /**
- * Reusable picker modal:
- * - mode="date" returns "YYYY-MM-DD"
- * - mode="datetime" returns "YYYY-MM-DDTHH:mm"
- * ✅ Works on native + web
+ * Pure React Native date/date-time picker.
+ * Avoids Android native picker modal bugs like `dismiss of undefined` and gives
+ * the same polished UI across Expense, Visits, Collections, Orders and Route Plan.
  */
 export default function DateTimePickerModal({
   open,
@@ -61,16 +102,29 @@ export default function DateTimePickerModal({
   onApply: (v: string) => void;
 }) {
   const initial = useMemo(() => parseLocalDate(value, mode), [value, mode]);
-  const [temp, setTemp] = useState<Date>(initial);
-  const [webValue, setWebValue] = useState<string>(value || (mode === "date" ? formatYMD(new Date()) : formatLocalDT(new Date())));
+  const [selected, setSelected] = useState<Date>(initial);
+  const [visibleMonth, setVisibleMonth] = useState<Date>(new Date(initial.getFullYear(), initial.getMonth(), 1));
+  const [hour, setHour] = useState(String(initial.getHours()));
+  const [minute, setMinute] = useState(String(initial.getMinutes()));
+  const [webValue, setWebValue] = useState<string>(
+    value || (mode === "date" ? formatYMD(new Date()) : formatLocalDT(new Date()))
+  );
 
   useEffect(() => {
     if (!open) return;
-    setTemp(initial);
-    setWebValue(value || (mode === "date" ? formatYMD(new Date()) : formatLocalDT(new Date())));
-  }, [open, initial, value, mode]);
+    const next = parseLocalDate(value, mode);
+    setSelected(next);
+    setVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1));
+    setHour(String(next.getHours()));
+    setMinute(String(next.getMinutes()));
+    setWebValue(value || (mode === "date" ? formatYMD(next) : formatLocalDT(next)));
+  }, [open, value, mode]);
 
   if (!open) return null;
+
+  const days = buildCalendarDays(visibleMonth);
+  const today = new Date();
+  const selectedText = mode === "date" ? formatYMD(selected) : `${formatYMD(selected)} ${pad(Number(hour || 0))}:${pad(Number(minute || 0))}`;
 
   const apply = () => {
     if (Platform.OS === "web") {
@@ -79,9 +133,19 @@ export default function DateTimePickerModal({
       return;
     }
 
-    if (mode === "date") onApply(formatYMD(temp));
-    else onApply(formatLocalDT(temp));
+    if (mode === "date") {
+      onApply(formatYMD(selected));
+    } else {
+      const h = Math.max(0, Math.min(23, Number(hour || 0)));
+      const m = Math.max(0, Math.min(59, Number(minute || 0)));
+      const finalDate = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate(), h, m);
+      onApply(formatLocalDT(finalDate));
+    }
     onClose();
+  };
+
+  const moveMonth = (offset: number) => {
+    setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
   };
 
   return (
@@ -89,46 +153,64 @@ export default function DateTimePickerModal({
       <Pressable
         onPress={onClose}
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(15,23,42,0.45)",
-          padding: 16,
+          flex: 1,
+          backgroundColor: "rgba(15,23,42,0.52)",
+          padding: 18,
           justifyContent: "center",
-          zIndex: 999999,
-          elevation: 999999,
         }}
       >
         <Pressable
           onPress={(e) => e.stopPropagation()}
           style={{
             backgroundColor: "#fff",
-            borderRadius: 16,
-            padding: 14,
+            borderRadius: 28,
+            padding: 18,
             borderWidth: 1,
-            borderColor: UI.border,
+            borderColor: "rgba(255,255,255,0.70)",
             maxWidth: 560,
             width: "100%",
             alignSelf: "center",
+            shadowColor: "#000",
+            shadowOpacity: 0.16,
+            shadowRadius: 28,
+            elevation: 18,
           }}
         >
-          <Text style={{ fontWeight: "900", color: UI.text, fontSize: 16 }}>{title}</Text>
-          <Text style={{ marginTop: 4, color: UI.sub, fontWeight: "700", fontSize: 12 }}>
-            {mode === "date" ? "Select a date" : "Select date & time"}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: "900", color: UI.text, fontSize: 18 }}>{title}</Text>
+              <Text style={{ marginTop: 5, color: UI.sub, fontWeight: "700", fontSize: 13 }}>{selectedText}</Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                const d = new Date();
+                setSelected(d);
+                setVisibleMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+                setHour(String(d.getHours()));
+                setMinute(String(d.getMinutes()));
+              }}
+              style={({ pressed }) => ({
+                paddingVertical: 9,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                backgroundColor: pressed ? "rgba(37,99,235,0.16)" : UI.primarySoft,
+              })}
+            >
+              <Text style={{ color: UI.primary, fontWeight: "900", fontSize: 12 }}>Today</Text>
+            </Pressable>
+          </View>
 
-          <View style={{ height: 12 }} />
+          <View style={{ height: 14 }} />
 
           {Platform.OS === "web" ? (
             <View
               style={{
-                borderRadius: 12,
+                borderRadius: 16,
                 borderWidth: 1,
                 borderColor: UI.border,
                 overflow: "hidden",
-                padding: 10,
+                padding: 12,
+                backgroundColor: UI.bg,
               }}
             >
               {/* @ts-ignore web input */}
@@ -136,43 +218,170 @@ export default function DateTimePickerModal({
                 type={mode === "date" ? "date" : "datetime-local"}
                 value={webValue}
                 onChange={(e) => setWebValue((e.target as any).value)}
-                style={{
-                  width: "100%",
-                  fontSize: 16,
-                  border: "none",
-                  outline: "none",
-                }}
+                style={{ width: "100%", fontSize: 16, border: "none", outline: "none", backgroundColor: "transparent" }}
               />
             </View>
           ) : (
-            <View
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                overflow: "hidden",
-                paddingVertical: 6,
-              }}
-            >
-              <DateTimePicker
-                value={temp}
-                mode={mode === "date" ? "date" : "datetime"}
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(event, selectedDate) => {
-                  if ((event as any)?.type === "dismissed") return;
-                  if (selectedDate) setTemp(selectedDate);
+            <>
+              <View
+                style={{
+                  borderRadius: 22,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bg,
+                  padding: 14,
                 }}
-              />
-            </View>
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Pressable
+                    onPress={() => moveMonth(-1)}
+                    style={({ pressed }) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 14,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: pressed ? "rgba(15,23,42,0.08)" : "#fff",
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                    })}
+                  >
+                    <Text style={{ fontSize: 24, fontWeight: "900", color: UI.text }}>‹</Text>
+                  </Pressable>
+
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ fontSize: 16, fontWeight: "900", color: UI.text }}>
+                      {MONTHS[visibleMonth.getMonth()]} {visibleMonth.getFullYear()}
+                    </Text>
+                    <Text style={{ marginTop: 2, color: UI.sub, fontWeight: "700", fontSize: 12 }}>Tap a date to select</Text>
+                  </View>
+
+                  <Pressable
+                    onPress={() => moveMonth(1)}
+                    style={({ pressed }) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 14,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: pressed ? "rgba(15,23,42,0.08)" : "#fff",
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                    })}
+                  >
+                    <Text style={{ fontSize: 24, fontWeight: "900", color: UI.text }}>›</Text>
+                  </Pressable>
+                </View>
+
+                <View style={{ flexDirection: "row", marginTop: 14 }}>
+                  {WEEK_DAYS.map((day, idx) => (
+                    <View key={`${day}-${idx}`} style={{ flex: 1, alignItems: "center", paddingVertical: 6 }}>
+                      <Text style={{ color: UI.sub, fontWeight: "900", fontSize: 12 }}>{day}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  {days.map((day, index) => {
+                    const selectedDay = day ? sameDay(day, selected) : false;
+                    const todayDay = day ? sameDay(day, today) : false;
+                    return (
+                      <View key={`${day?.toISOString() || "empty"}-${index}`} style={{ width: `${100 / 7}%`, padding: 3 }}>
+                        {day ? (
+                          <Pressable
+                            onPress={() => setSelected(day)}
+                            style={({ pressed }) => ({
+                              height: 40,
+                              borderRadius: 14,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: selectedDay
+                                ? UI.primary
+                                : pressed
+                                ? "rgba(37,99,235,0.12)"
+                                : todayDay
+                                ? "rgba(37,99,235,0.08)"
+                                : "transparent",
+                              borderWidth: todayDay && !selectedDay ? 1 : 0,
+                              borderColor: "rgba(37,99,235,0.22)",
+                            })}
+                          >
+                            <Text style={{ fontWeight: "900", color: selectedDay ? "#fff" : UI.text }}>{day.getDate()}</Text>
+                          </Pressable>
+                        ) : (
+                          <View style={{ height: 40 }} />
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {mode === "datetime" ? (
+                <View
+                  style={{
+                    marginTop: 12,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: "#fff",
+                    padding: 12,
+                  }}
+                >
+                  <Text style={{ color: UI.sub, fontWeight: "900", fontSize: 12, marginBottom: 10 }}>TIME</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <TextInput
+                      value={hour}
+                      onChangeText={(v) => setHour(clampTextNumber(v, 0, 23))}
+                      keyboardType="number-pad"
+                      placeholder="HH"
+                      maxLength={2}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 11,
+                        paddingHorizontal: 12,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        color: UI.text,
+                        fontWeight: "900",
+                        textAlign: "center",
+                        fontSize: 16,
+                      }}
+                    />
+                    <Text style={{ fontWeight: "900", fontSize: 18, color: UI.text }}>:</Text>
+                    <TextInput
+                      value={minute}
+                      onChangeText={(v) => setMinute(clampTextNumber(v, 0, 59))}
+                      keyboardType="number-pad"
+                      placeholder="MM"
+                      maxLength={2}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 11,
+                        paddingHorizontal: 12,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        color: UI.text,
+                        fontWeight: "900",
+                        textAlign: "center",
+                        fontSize: 16,
+                      }}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </>
           )}
 
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 14 }}>
             <Pressable
               onPress={onClose}
               style={({ pressed }) => ({
                 flex: 1,
-                padding: 12,
-                borderRadius: 12,
+                paddingVertical: 14,
+                borderRadius: 16,
                 backgroundColor: pressed ? "rgba(15,23,42,0.10)" : "rgba(15,23,42,0.06)",
                 alignItems: "center",
                 borderWidth: 1,
@@ -186,10 +395,14 @@ export default function DateTimePickerModal({
               onPress={apply}
               style={({ pressed }) => ({
                 flex: 1,
-                padding: 12,
-                borderRadius: 12,
-                backgroundColor: pressed ? "rgba(37,99,235,0.85)" : UI.primary,
+                paddingVertical: 14,
+                borderRadius: 16,
+                backgroundColor: pressed ? "#1d4ed8" : UI.primary,
                 alignItems: "center",
+                shadowColor: UI.primary,
+                shadowOpacity: 0.22,
+                shadowRadius: 14,
+                elevation: 4,
               })}
             >
               <Text style={{ fontWeight: "900", color: "#fff" }}>Done</Text>
