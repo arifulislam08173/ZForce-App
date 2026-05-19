@@ -18,12 +18,12 @@ async function uriToFilePart(uri: string, filename: string) {
 
 function multipartConfig() {
   if (Platform.OS === 'web') {
-    return { timeout: 60000 };
+    return { timeout: 70000 };
   }
 
   return {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60000,
+    timeout: 70000,
   };
 }
 

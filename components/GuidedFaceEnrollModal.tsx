@@ -684,7 +684,7 @@ export default function GuidedFaceEnrollModal({
           <Text style={styles.validatingTitle}>Checking photo quality</Text>
           <Text style={styles.validatingSubtitle}>
             Your photo has been captured. You can relax now while we verify the
-            face angle, lighting, sharpness, and secure embedding.
+            face angle, lighting, sharpness.
           </Text>
           <View style={styles.validatingPill}>
             <Text style={styles.validatingPillText}>Camera paused for privacy</Text>

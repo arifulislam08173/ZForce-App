@@ -10,8 +10,8 @@ export type OptimizedFaceImage = {
 const ENROLL_IMAGE_MAX_SIZE = 640;
 const ENROLL_IMAGE_QUALITY = 72;
 
-const ATTENDANCE_IMAGE_MAX_SIZE = 512;
-const ATTENDANCE_IMAGE_QUALITY = 68;
+const ATTENDANCE_IMAGE_MAX_SIZE = 448;
+const ATTENDANCE_IMAGE_QUALITY = 64;
 
 async function resizeFaceImage(
   uri: string,

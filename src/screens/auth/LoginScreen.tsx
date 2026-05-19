@@ -158,7 +158,7 @@ export default function LoginScreen() {
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="zforce99@test.com"
+                placeholder="example@gmail.com"
                 placeholderTextColor="rgba(255,255,255,0.38)"
                 autoCapitalize="none"
                 autoCorrect={false}

@@ -16,6 +16,8 @@ type VerifyResult = {
   message?: string;
 };
 
+type ScanStatus = 'idle' | 'preparing' | 'scanning' | 'verifying' | 'success' | 'fail';
+
 type Props = {
   visible: boolean;
   title: string;
@@ -32,14 +34,14 @@ export default function FaceScanModal({
   subtitle,
   onClose,
   onVerify,
-  scanIntervalMs = 650,
-  maxScanMs = 10000,
+  scanIntervalMs = 500,
+  maxScanMs = 9000,
 }: Props) {
   const cameraRef = useRef<Camera>(null);
   const device = useCameraDevice('front');
 
   const [hasPermission, setHasPermission] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'success' | 'fail'>('idle');
+  const [status, setStatus] = useState<ScanStatus>('idle');
   const [message, setMessage] = useState('');
   const [capturing, setCapturing] = useState(false);
 
@@ -48,8 +50,10 @@ export default function FaceScanModal({
   const startedAtRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef = useRef(false);
+  const attemptRef = useRef(0);
 
   const lineY = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
 
   const { width, height } = Dimensions.get('window');
 
@@ -65,11 +69,13 @@ export default function FaceScanModal({
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     lineY.stopAnimation();
+    pulse.stopAnimation();
   };
 
   const resetState = () => {
     clearLoop();
     closedRef.current = false;
+    attemptRef.current = 0;
     setStatus('idle');
     setMessage('');
     capturingRef.current = false;
@@ -82,12 +88,30 @@ export default function FaceScanModal({
       Animated.sequence([
         Animated.timing(lineY, {
           toValue: 1,
-          duration: 900,
+          duration: 760,
           useNativeDriver: true,
         }),
         Animated.timing(lineY, {
           toValue: 0,
-          duration: 900,
+          duration: 760,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startPulseAnimation = () => {
+    pulse.setValue(0);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 850,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 850,
           useNativeDriver: true,
         }),
       ])
@@ -134,6 +158,8 @@ export default function FaceScanModal({
     return clearLoop;
   }, [visible, hasPermission, device]);
 
+  const cameraActive = visible && status !== 'verifying' && status !== 'success' && status !== 'fail';
+
   const takeFrame = async (): Promise<string | null> => {
     try {
       if (!cameraRef.current) return null;
@@ -157,7 +183,7 @@ export default function FaceScanModal({
     const elapsed = Date.now() - startedAtRef.current;
     if (elapsed > maxScanMs) {
       setStatus('fail');
-      setMessage('Face not matched. Please try again.');
+      setMessage('Face not verified. Please keep your full face visible and try again.');
       clearLoop();
       return;
     }
@@ -169,61 +195,85 @@ export default function FaceScanModal({
 
     try {
       capturingRef.current = true;
+      attemptRef.current += 1;
       setCapturing(true);
+      setStatus('scanning');
+      setMessage(
+        attemptRef.current <= 1
+          ? 'Capturing best frame...'
+          : 'Trying another frame... keep face centered'
+      );
 
       const uri = await takeFrame();
 
-      if (uri) {
-        const result = await onVerify(uri);
-
-        if (result.ok && result.match) {
-          setStatus('success');
-          setMessage(result.message || 'Face verified successfully');
-          clearLoop();
-
-          setTimeout(() => {
-            if (!closedRef.current) {
-              closedRef.current = true;
-              onClose();
-            }
-          }, 700);
-          return;
-        }
-
+      if (!uri) {
         setStatus('scanning');
-        setMessage(result.message || 'Scanning... keep face centered');
-      } else {
-        setStatus('scanning');
-        setMessage('Scanning... keep face centered');
+        setMessage('Camera frame not ready. Keep your face centered.');
+        return;
       }
+
+      // A frame has been captured. Pause camera for privacy and show clear UX.
+      scanningRef.current = false;
+      lineY.stopAnimation();
+      setStatus('verifying');
+      setMessage('Photo captured. Verifying identity securely...');
+      startPulseAnimation();
+
+      const result = await onVerify(uri);
+
+      if (result.ok && result.match) {
+        pulse.stopAnimation();
+        setStatus('success');
+        setMessage(result.message || 'Face verified successfully');
+        clearLoop();
+
+        setTimeout(() => {
+          if (!closedRef.current) {
+            closedRef.current = true;
+            onClose();
+          }
+        }, 720);
+        return;
+      }
+
+      pulse.stopAnimation();
+      setStatus('fail');
+      setMessage(
+        result.message ||
+          'Face not verified. Please remove mask, keep your full face visible, and try again.'
+      );
+      clearLoop();
     } catch (error: any) {
-      setStatus('scanning');
-      setMessage(error?.message || 'Scanning... keep face centered');
+      pulse.stopAnimation();
+      setStatus('fail');
+      setMessage(
+        error?.message ||
+          'Verification failed. Please keep your full face visible and try again.'
+      );
+      clearLoop();
     } finally {
       capturingRef.current = false;
       setCapturing(false);
     }
-
-    timerRef.current = setTimeout(scanLoop, scanIntervalMs);
   };
 
   const startScanLoop = () => {
     clearLoop();
     closedRef.current = false;
-    setStatus('scanning');
-    setMessage('Preparing camera... keep your face inside the frame');
+    attemptRef.current = 0;
+    setStatus('preparing');
+    setMessage('Preparing camera and light...');
     scanningRef.current = true;
     startedAtRef.current = Date.now();
     startLineAnimation();
 
-    // Give the camera a short moment for focus/exposure after the modal opens.
-    // This avoids first-frame failures on slower Android devices.
     timerRef.current = setTimeout(() => {
       if (!closedRef.current && scanningRef.current) {
-        setMessage('Scanning... keep your face centered');
+        setStatus('scanning');
+        setMessage('Look at the camera. Full face should be visible.');
         void scanLoop();
       }
-    }, 800);
+    }, 650);
   };
 
   const handleRetry = () => {
@@ -234,6 +284,16 @@ export default function FaceScanModal({
   const lineTranslate = lineY.interpolate({
     inputRange: [0, 1],
     outputRange: [8, box.size - 8],
+  });
+
+  const pulseScale = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.05],
+  });
+
+  const pulseOpacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.18, 0.36],
   });
 
   return (
@@ -271,7 +331,7 @@ export default function FaceScanModal({
               ref={cameraRef}
               style={{ flex: 1 }}
               device={device}
-              isActive={visible}
+              isActive={cameraActive}
               photo
             />
           ) : (
@@ -292,10 +352,10 @@ export default function FaceScanModal({
               bottom: 0,
             }}
           >
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }} />
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.34)' }} />
 
             <View style={{ flexDirection: 'row' }}>
-              <View style={{ width: box.left, backgroundColor: 'rgba(0,0,0,0.32)' }} />
+              <View style={{ width: box.left, backgroundColor: 'rgba(0,0,0,0.34)' }} />
 
               <View
                 style={{
@@ -308,12 +368,16 @@ export default function FaceScanModal({
                       ? '#22c55e'
                       : status === 'fail'
                       ? '#ef4444'
+                      : status === 'verifying'
+                      ? '#60a5fa'
                       : 'rgba(255,255,255,0.92)',
                   overflow: 'hidden',
                   backgroundColor: 'rgba(255,255,255,0.02)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                {status === 'scanning' && (
+                {(status === 'scanning' || status === 'preparing') && (
                   <Animated.View
                     style={{
                       position: 'absolute',
@@ -325,12 +389,25 @@ export default function FaceScanModal({
                     }}
                   />
                 )}
+
+                {status === 'verifying' && (
+                  <Animated.View
+                    style={{
+                      width: box.size * 0.52,
+                      height: box.size * 0.52,
+                      borderRadius: box.size,
+                      backgroundColor: '#60a5fa',
+                      opacity: pulseOpacity,
+                      transform: [{ scale: pulseScale }],
+                    }}
+                  />
+                )}
               </View>
 
-              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }} />
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.34)' }} />
             </View>
 
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }} />
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.34)' }} />
           </View>
         </View>
 
@@ -340,16 +417,18 @@ export default function FaceScanModal({
               color: '#fff',
               textAlign: 'center',
               fontSize: 15,
-              fontWeight: '700',
+              fontWeight: '800',
             }}
           >
-            Keep your face centered inside the frame and hold still.
+            {status === 'verifying'
+              ? 'You can relax now. We already captured the photo.'
+              : 'Keep your full face visible inside the frame.'}
           </Text>
 
           <View
             style={{
               marginTop: 14,
-              minHeight: 28,
+              minHeight: 58,
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -360,12 +439,30 @@ export default function FaceScanModal({
               </Text>
             ) : status === 'fail' ? (
               <Text style={{ color: '#ef4444', fontWeight: '900', textAlign: 'center' }}>
-                {message || 'Face not matched. Please try again.'}
+                {message || 'Face not verified. Please try again.'}
               </Text>
+            ) : status === 'verifying' ? (
+              <>
+                <Text style={{ color: '#93c5fd', fontWeight: '900' }}>
+                  Verifying securely...
+                </Text>
+                {!!message && (
+                  <Text
+                    style={{
+                      color: 'rgba(255,255,255,0.72)',
+                      marginTop: 6,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {message}
+                  </Text>
+                )}
+                <ActivityIndicator style={{ marginTop: 10 }} color="#93c5fd" />
+              </>
             ) : (
               <>
                 <Text style={{ color: 'rgba(255,255,255,0.78)', fontWeight: '800' }}>
-                  Scanning...
+                  {status === 'preparing' ? 'Preparing...' : 'Scanning...'}
                 </Text>
                 {!!message && (
                   <Text
